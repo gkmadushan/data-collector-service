@@ -23,6 +23,11 @@ def main(ch, method, properties, body):
         inventory_item = INVENTORY_SERVICE_CLASSES.__contains__(details['class'])
         issue_item = ISSUE_SERVICE_CLASSES.__contains__(details['class'])
 
+        if details['fixes'] != None:
+            remediation_script = base64.b64encode(json.dumps(details['fixes']).encode()).decode()
+        else:   
+            remediation_script = None
+
         if(inventory_item):            
             inventory_details = {
                 "name": details['title'],
@@ -32,8 +37,8 @@ def main(ch, method, properties, body):
                 "description": details['description']
             }
             # print(str(issue_details), file=sys.stderr)
-            response = requests.post(INVENTORY_SERVICE_URL+'/v1/inventory', json=inventory_details)
-            
+            response = requests.post(INVENTORY_SERVICE_URL+'/v1/inventory', json=inventory_details)        
+
         if(issue_item):
             issue_details = {
                 "resource": details['reference'],
@@ -41,7 +46,7 @@ def main(ch, method, properties, body):
                 "description": details['description'],
                 "score": details['severity'],
                 "issue_id": base64.b64encode(json.dumps(details['references']).encode()).decode(),
-                "remediation_script": base64.b64encode(json.dumps(details['fixes']).encode()).decode(),
+                "remediation_script": remediation_script,
                 "issue_date":details['issued_date'],
                 "reference":details['scan_id']
             }
@@ -51,7 +56,7 @@ def main(ch, method, properties, body):
         
     except Exception as e:
         print('EXCEPTION'+str(sys.exc_info()), file=sys.stderr)
-    # ch.basic_ack(delivery_tag = method.delivery_tag)
+    ch.basic_ack(delivery_tag = method.delivery_tag)
 
     
 def subscribe():
