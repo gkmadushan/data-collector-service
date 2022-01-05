@@ -17,6 +17,7 @@ INVENTORY_SERVICE_URL = os.getenv('INVENTORY_SERVICE_URL')
 ISSUE_SERVICE_CLASSES = json.loads(os.getenv('ISSUE_SERVICE_CLASSES'))
 INVENTORY_SERVICE_CLASSES = json.loads(os.getenv('INVENTORY_SERVICE_CLASSES'))
 
+
 def main(ch, method, properties, body):
     details = json.loads(body)
     try:
@@ -25,44 +26,48 @@ def main(ch, method, properties, body):
 
         if details['fixes'] != None:
             remediation_script = base64.b64encode(json.dumps(details['fixes']).encode()).decode()
-        else:   
+        else:
             remediation_script = None
 
-        if(inventory_item):            
+        if(inventory_item):
             inventory_details = {
                 "name": details['title'],
-                "code": "string", #oval id
+                "code": "string",  # oval id
                 "vendor": "",
                 "contact": "",
                 "description": details['description']
             }
             # print(str(issue_details), file=sys.stderr)
-            response = requests.post(INVENTORY_SERVICE_URL+'/v1/inventory', json=inventory_details)        
+            response = requests.post(INVENTORY_SERVICE_URL+'/v1/inventory', json=inventory_details)
 
         if(issue_item):
-            issue_details = {
-                "resource": details['reference'],
-                "title": details['title'],
-                "description": details['description'],
-                "score": details['severity'],
-                "issue_id": base64.b64encode(json.dumps(details['references']).encode()).decode(),
-                "remediation_script": remediation_script,
-                "issue_date":details['issued_date'],
-                "reference":details['scan_id']
-            }
-            # print(str(issue_details), file=sys.stderr)
-            response = requests.post(ISSUE_SERVICE_URL+'/v1/issues', json=issue_details)
+            status = details['status'] == True and True or False
+            if status == True:
+                issue_details = {
+                    "resource": details['reference'],
+                    "title": details['title'],
+                    "description": details['description'],
+                    "score": details['severity'],
+                    "issue_id": base64.b64encode(json.dumps(details['references']).encode()).decode(),
+                    "remediation_script": remediation_script,
+                    "issue_date": details['issued_date'],
+                    "reference": details['scan_id']
+                }
+                # print(str(issue_details), file=sys.stderr)
+                response = requests.post(ISSUE_SERVICE_URL+'/v1/issues', json=issue_details)
+            else:
+                response = requests.delete(ISSUE_SERVICE_URL+'/v1/issues/'+details['id'])
+                print('soft delete item if exists')
 
-        
     except Exception as e:
         print('EXCEPTION'+str(sys.exc_info()), file=sys.stderr)
-    ch.basic_ack(delivery_tag = method.delivery_tag)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    
+
 def subscribe():
     detection_classes_response = requests.get(DETECTOR_SERVICE_URL+'/v1/scans/classes')
-    detection_classes = json.loads(detection_classes_response.text)    
-   
+    detection_classes = json.loads(detection_classes_response.text)
+
     while(True):
         time.sleep(2.4)
         print('Consumer Starting...')
@@ -72,9 +77,9 @@ def subscribe():
             channel.queue_declare(queue=classname['code'], durable=True)
             channel.basic_qos(prefetch_count=5)
             channel.basic_consume(queue=classname['code'], auto_ack=False, on_message_callback=main)
-        
+
         try:
-            channel.start_consuming()    
+            channel.start_consuming()
         except pika.exceptions.ConnectionClosedByBroker as e:
             print(e)
             continue
@@ -86,6 +91,7 @@ def subscribe():
             continue
         except Exception as ex:
             break
+
 
 print('Data Collection v1.0')
 subscribe()
